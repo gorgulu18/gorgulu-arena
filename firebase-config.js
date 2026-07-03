@@ -1,8 +1,8 @@
 window.GORGULU_FIREBASE_CONFIG = {
-  apiKey: "BURAYA_API_KEY",
-  authDomain: "BURAYA_AUTH_DOMAIN",
-  projectId: "BURAYA_PROJECT_ID",
-  storageBucket: "BURAYA_STORAGE_BUCKET",
-  messagingSenderId: "BURAYA_MESSAGING_SENDER_ID",
-  appId: "BURAYA_APP_ID"
+  apiKey: "AIzaSyDzJCJvaCbeNKjlngaB7NZLLLW7OTr2sfo",
+  authDomain: "gorgulu-arena.firebaseapp.com",
+  projectId: "gorgulu-arena",
+  storageBucket: "gorgulu-arena.firebasestorage.app",
+  messagingSenderId: "224059831586",
+  appId: "1:224059831586:web:c64dad375c30d4f232a17b"
 };
