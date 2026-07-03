@@ -141,6 +141,7 @@ p {
 }
 
 .icon-button,
+.cloud-button,
 .install-button,
 .primary-button,
 .secondary-button,
@@ -155,6 +156,7 @@ p {
 }
 
 .icon-button:hover,
+.cloud-button:hover,
 .install-button:hover,
 .primary-button:hover,
 .secondary-button:hover,
@@ -182,6 +184,27 @@ p {
   background: var(--sun);
   color: var(--ink);
   box-shadow: 0 10px 24px rgba(248, 195, 74, 0.26);
+}
+
+.cloud-button {
+  max-width: 136px;
+  padding: 0 13px;
+  overflow: hidden;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 10px 24px rgba(24, 32, 47, 0.1);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cloud-button.is-online {
+  background: var(--mint);
+  color: #053829;
+}
+
+.cloud-button.is-setup {
+  background: var(--rose);
+  color: #4b1023;
 }
 
 .primary-button,
@@ -837,7 +860,8 @@ input:focus {
 }
 
 .profile-dialog,
-.install-dialog {
+.install-dialog,
+.family-dialog {
   width: min(720px, calc(100% - 28px));
   border: 0;
   border-radius: 14px;
@@ -847,12 +871,14 @@ input:focus {
 }
 
 .profile-dialog::backdrop,
-.install-dialog::backdrop {
+.install-dialog::backdrop,
+.family-dialog::backdrop {
   background: rgba(24, 32, 47, 0.38);
 }
 
 .profile-dialog form,
-.install-dialog form {
+.install-dialog form,
+.family-dialog form {
   padding: 18px;
 }
 
@@ -878,6 +904,38 @@ input:focus {
 
 .install-steps p {
   margin: 0;
+}
+
+.family-form {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.family-form label {
+  font-weight: 900;
+}
+
+.family-form p {
+  margin: 0;
+}
+
+.cloud-state {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(24, 32, 47, 0.08);
+}
+
+.cloud-state strong {
+  display: block;
+}
+
+.cloud-state small {
+  color: var(--muted);
+  font-weight: 800;
 }
 
 .profile-editor {
@@ -1050,6 +1108,11 @@ input:focus {
     min-height: 42px;
     padding: 0 6px;
     font-size: 0.84rem;
+  }
+
+  .cloud-button {
+    max-width: 82px;
+    padding: 0 9px;
   }
 
   .section-heading,

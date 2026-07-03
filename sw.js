@@ -1,9 +1,10 @@
-const CACHE_NAME = "aile-arenasi-v4";
+const CACHE_NAME = "gorgulu-arena-v4";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
+  "./firebase-config.js",
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png",

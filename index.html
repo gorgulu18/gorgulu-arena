@@ -21,6 +21,7 @@
         </div>
         <div class="top-actions">
           <div class="app-mood-icon" id="appMoodIcon" aria-label="Uygulama ruh hali">🏆</div>
+          <button class="cloud-button" id="openFamily" type="button">Yerel</button>
           <button class="install-button" id="installApp" type="button">Kur</button>
           <button class="icon-button" id="openProfiles" type="button" aria-label="Profilleri düzenle" title="Profilleri düzenle">
             <span aria-hidden="true">⚙</span>
@@ -187,8 +188,31 @@
       </form>
     </dialog>
 
+    <dialog class="family-dialog" id="familyDialog">
+      <form method="dialog">
+        <div class="dialog-header">
+          <div>
+            <p class="eyebrow">Ortak aile odası</p>
+            <h3>Aile kodu ile buluta bağlan</h3>
+          </div>
+          <button class="icon-button" value="close" aria-label="Kapat" title="Kapat">×</button>
+        </div>
+        <div class="family-form">
+          <label for="familyCodeInput">Aile kodu</label>
+          <input id="familyCodeInput" type="text" maxlength="24" placeholder="Örn. GORGULU-4821" autocomplete="off" />
+          <p id="familyCloudHelp">Firebase ayarları eklenince bu kod tüm telefonları aynı odaya bağlayacak.</p>
+          <div class="cloud-state" id="cloudStateBox"></div>
+        </div>
+        <menu class="dialog-actions">
+          <button class="secondary-button" id="leaveFamily" type="button">Yerel moda dön</button>
+          <button class="primary-button" id="saveFamilyCode" type="button">Kodu kaydet</button>
+        </menu>
+      </form>
+    </dialog>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <canvas class="confetti-canvas" id="confettiCanvas" aria-hidden="true"></canvas>
+    <script src="./firebase-config.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

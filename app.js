@@ -56,6 +56,15 @@ const avatarFaces = ["😊", "😄", "😎", "🤩", "😇", "😋", "🥳", "�
 const storageKey = "aile-arenasi-v1";
 const state = loadState();
 const missedDaysOnOpen = calculateMissedDays(state.lastVisit);
+const cloud = {
+  status: "local",
+  ready: false,
+  applyingRemote: false,
+  unsubscribe: null,
+  familyRef: null,
+  saveTimer: null,
+  api: null,
+};
 
 let currentVoterId = null;
 let currentQuestion = 0;
@@ -69,6 +78,13 @@ const els = {
   heroMascot: document.querySelector("#heroMascot"),
   moodLine: document.querySelector("#moodLine"),
   openProfiles: document.querySelector("#openProfiles"),
+  openFamily: document.querySelector("#openFamily"),
+  familyDialog: document.querySelector("#familyDialog"),
+  familyCodeInput: document.querySelector("#familyCodeInput"),
+  familyCloudHelp: document.querySelector("#familyCloudHelp"),
+  cloudStateBox: document.querySelector("#cloudStateBox"),
+  saveFamilyCode: document.querySelector("#saveFamilyCode"),
+  leaveFamily: document.querySelector("#leaveFamily"),
   installApp: document.querySelector("#installApp"),
   installDialog: document.querySelector("#installDialog"),
   profileDialog: document.querySelector("#profileDialog"),
@@ -104,6 +120,7 @@ const els = {
 state.lastVisit = todayKey();
 saveState();
 registerServiceWorker();
+initCloud();
 
 function loadState() {
   const fallback = {
@@ -112,6 +129,7 @@ function loadState() {
     votes: {},
     notes: {},
     lastVisit: null,
+    familyCode: "",
   };
 
   try {
@@ -123,6 +141,7 @@ function loadState() {
       votes: saved.votes || {},
       notes: saved.notes || {},
       lastVisit: saved.lastVisit || null,
+      familyCode: saved.familyCode || "",
     };
   } catch {
     return fallback;
@@ -140,6 +159,7 @@ function normalizeMembers(members) {
 
 function saveState() {
   localStorage.setItem(storageKey, JSON.stringify(state));
+  if (!cloud.applyingRemote) scheduleCloudSave();
 }
 
 function registerServiceWorker() {
@@ -147,6 +167,180 @@ function registerServiceWorker() {
   navigator.serviceWorker.register("./sw.js").catch(() => {
     showToast("Offline kurulum şimdilik hazırlanamadı.");
   });
+}
+
+function hasFirebaseConfig() {
+  const config = window.GORGULU_FIREBASE_CONFIG;
+  return Boolean(
+    config &&
+      config.apiKey &&
+      config.projectId &&
+      !String(config.apiKey).includes("BURAYA") &&
+      !String(config.projectId).includes("BURAYA")
+  );
+}
+
+function getCloudPayload() {
+  return {
+    members: state.members,
+    categories: state.categories,
+    votes: state.votes,
+    notes: state.notes,
+    lastVisit: state.lastVisit,
+    updatedAt: cloud.api?.serverTimestamp ? cloud.api.serverTimestamp() : new Date().toISOString(),
+  };
+}
+
+function applyCloudPayload(data) {
+  if (!data) return;
+  state.members = normalizeMembers(data.members);
+  state.categories = Array.isArray(data.categories) && data.categories.length ? data.categories : defaultCategories;
+  state.votes = data.votes || {};
+  state.notes = data.notes || {};
+  state.lastVisit = data.lastVisit || state.lastVisit;
+  saveLocalStateOnly();
+}
+
+function saveLocalStateOnly() {
+  localStorage.setItem(storageKey, JSON.stringify(state));
+}
+
+function setCloudStatus(status, message = "") {
+  cloud.status = status;
+  renderCloudStatus(message);
+}
+
+function renderCloudStatus(message = "") {
+  const hasCode = Boolean(state.familyCode);
+  const hasConfig = hasFirebaseConfig();
+  els.openFamily.classList.toggle("is-online", cloud.status === "online");
+  els.openFamily.classList.toggle("is-setup", !hasConfig || cloud.status === "error");
+
+  if (cloud.status === "online" && hasCode) {
+    els.openFamily.textContent = state.familyCode;
+  } else if (!hasConfig) {
+    els.openFamily.textContent = "Kurulum";
+  } else if (hasCode) {
+    els.openFamily.textContent = "Bulut...";
+  } else {
+    els.openFamily.textContent = "Yerel";
+  }
+
+  const title = cloud.status === "online" ? "Bulut bağlı" : hasConfig ? "Bulut hazır" : "Firebase bekleniyor";
+  const detail =
+    message ||
+    (cloud.status === "online"
+      ? `${state.familyCode} odasına bağlısınız.`
+      : hasConfig
+        ? "Aile kodunu girince ortak oda açılacak."
+        : "Firebase ayar dosyası eklendikten sonra ortak veri açılacak.");
+
+  els.cloudStateBox.innerHTML = `
+    <strong>${title}</strong>
+    <small>${detail}</small>
+  `;
+  els.familyCloudHelp.textContent = hasConfig
+    ? "Aynı aile kodunu giren herkes aynı oyları, rozetleri ve günlük cümleleri görecek."
+    : "Önce Firebase ücretsiz proje ayarlarını ekleyeceğiz; sonra bu kod tüm telefonları aynı odaya bağlayacak.";
+}
+
+async function initCloud() {
+  renderCloudStatus();
+  if (!hasFirebaseConfig() || !state.familyCode) return;
+  try {
+    setCloudStatus("connecting", "Firebase'e bağlanılıyor...");
+    const [{ initializeApp }, authApi, firestoreApi] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"),
+      import("https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js"),
+      import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js"),
+    ]);
+    const app = initializeApp(window.GORGULU_FIREBASE_CONFIG);
+    const auth = authApi.getAuth(app);
+    await authApi.signInAnonymously(auth);
+    const db = firestoreApi.getFirestore(app);
+    cloud.api = firestoreApi;
+    cloud.familyRef = firestoreApi.doc(db, "families", state.familyCode);
+
+    const snapshot = await firestoreApi.getDoc(cloud.familyRef);
+    if (snapshot.exists()) {
+      cloud.applyingRemote = true;
+      applyCloudPayload(snapshot.data());
+      cloud.applyingRemote = false;
+      renderAll();
+    } else {
+      await firestoreApi.setDoc(cloud.familyRef, getCloudPayload(), { merge: true });
+    }
+
+    if (cloud.unsubscribe) cloud.unsubscribe();
+    cloud.unsubscribe = firestoreApi.onSnapshot(cloud.familyRef, (remoteSnapshot) => {
+      if (!remoteSnapshot.exists()) return;
+      cloud.applyingRemote = true;
+      applyCloudPayload(remoteSnapshot.data());
+      cloud.applyingRemote = false;
+      renderAll();
+      setCloudStatus("online");
+    });
+    setCloudStatus("online");
+  } catch (error) {
+    setCloudStatus("error", "Bulut bağlantısı kurulamadı. Firebase ayarlarını ve güvenlik kurallarını kontrol et.");
+  }
+}
+
+function scheduleCloudSave() {
+  if (!cloud.ready && cloud.status !== "online") return;
+  if (!cloud.familyRef || !cloud.api) return;
+  window.clearTimeout(cloud.saveTimer);
+  cloud.saveTimer = window.setTimeout(async () => {
+    try {
+      await cloud.api.setDoc(cloud.familyRef, getCloudPayload(), { merge: true });
+      setCloudStatus("online");
+    } catch {
+      setCloudStatus("error", "Buluta yazılamadı. İnternet veya Firebase kuralı gerekebilir.");
+    }
+  }, 450);
+}
+
+function normalizeFamilyCode(value) {
+  return value
+    .trim()
+    .toLocaleUpperCase("tr-TR")
+    .replaceAll("Ğ", "G")
+    .replaceAll("Ü", "U")
+    .replaceAll("Ş", "S")
+    .replaceAll("İ", "I")
+    .replaceAll("Ö", "O")
+    .replaceAll("Ç", "C")
+    .replace(/[^A-Z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function saveFamilyCode() {
+  const code = normalizeFamilyCode(els.familyCodeInput.value);
+  if (code.length < 4) {
+    els.familyCodeInput.focus();
+    showToast("Aile kodu en az 4 karakter olsun.");
+    return;
+  }
+  state.familyCode = code;
+  saveState();
+  els.familyDialog.close();
+  renderCloudStatus("Aile kodu kaydedildi.");
+  initCloud();
+  showToast(`${code} aile odası seçildi.`);
+}
+
+function leaveFamily() {
+  if (cloud.unsubscribe) cloud.unsubscribe();
+  cloud.unsubscribe = null;
+  cloud.familyRef = null;
+  cloud.api = null;
+  cloud.status = "local";
+  state.familyCode = "";
+  saveState();
+  els.familyDialog.close();
+  renderCloudStatus("Yerel moda dönüldü.");
+  showToast("Yerel moda dönüldü.");
 }
 
 function todayKey() {
@@ -187,6 +381,7 @@ function calculateMissedDays(lastVisitKey) {
 function renderAll() {
   renderDate();
   renderMood();
+  renderCloudStatus();
   renderVoters();
   renderVoteCard();
   renderScores();
@@ -718,6 +913,22 @@ els.dailyNoteInput.addEventListener("keydown", (event) => {
 });
 els.saveDailyNote.addEventListener("click", saveDailyNote);
 els.clearTodayNotes.addEventListener("click", clearTodayNotes);
+
+els.openFamily.addEventListener("click", () => {
+  els.familyCodeInput.value = state.familyCode || "";
+  renderCloudStatus();
+  els.familyDialog.showModal();
+  els.familyCodeInput.focus();
+});
+
+els.saveFamilyCode.addEventListener("click", saveFamilyCode);
+els.leaveFamily.addEventListener("click", leaveFamily);
+els.familyCodeInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    saveFamilyCode();
+  }
+});
 
 window.addEventListener("beforeinstallprompt", (event) => {
   event.preventDefault();
