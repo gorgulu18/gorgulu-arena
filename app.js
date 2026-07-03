@@ -187,7 +187,7 @@ function getCloudPayload() {
     votes: state.votes,
     notes: state.notes,
     lastVisit: state.lastVisit,
-    updatedAt: cloud.api?.serverTimestamp ? cloud.api.serverTimestamp() : new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 }
 
@@ -226,7 +226,16 @@ function renderCloudStatus(message = "") {
     els.openFamily.textContent = "Yerel";
   }
 
-  const title = cloud.status === "online" ? "Bulut bağlı" : hasConfig ? "Bulut hazır" : "Firebase bekleniyor";
+  const title =
+    cloud.status === "online"
+      ? "Bulut bağlı"
+      : cloud.status === "connecting"
+        ? "Buluta bağlanıyor"
+        : cloud.status === "error"
+          ? "Bulut hatası"
+          : hasConfig
+            ? "Bulut hazır"
+            : "Firebase bekleniyor";
   const detail =
     message ||
     (cloud.status === "online"
@@ -248,41 +257,29 @@ async function initCloud() {
   renderCloudStatus();
   if (!hasFirebaseConfig() || !state.familyCode) return;
   try {
-    setCloudStatus("connecting", "Firebase'e bağlanılıyor...");
-    const [{ initializeApp }, authApi, firestoreApi] = await Promise.all([
-      import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"),
-      import("https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js"),
-      import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js"),
-    ]);
-    const app = initializeApp(window.GORGULU_FIREBASE_CONFIG);
-    const auth = authApi.getAuth(app);
-    await authApi.signInAnonymously(auth);
-    const db = firestoreApi.getFirestore(app);
-    cloud.api = firestoreApi;
-    cloud.familyRef = firestoreApi.doc(db, "families", state.familyCode);
+    setCloudStatus("connecting", "Firebase REST bağlantısı deneniyor...");
+    if (cloud.unsubscribe) cloud.unsubscribe();
+    const config = window.GORGULU_FIREBASE_CONFIG;
+    cloud.api = await createCloudApi(config, state.familyCode);
+    cloud.familyRef = state.familyCode;
+    cloud.ready = true;
 
-    const snapshot = await firestoreApi.getDoc(cloud.familyRef);
-    if (snapshot.exists()) {
+    const remoteData = await cloud.api.getFamily();
+    if (remoteData) {
       cloud.applyingRemote = true;
-      applyCloudPayload(snapshot.data());
+      applyCloudPayload(remoteData);
       cloud.applyingRemote = false;
       renderAll();
     } else {
-      await firestoreApi.setDoc(cloud.familyRef, getCloudPayload(), { merge: true });
+      await cloud.api.setFamily(getCloudPayload());
     }
 
-    if (cloud.unsubscribe) cloud.unsubscribe();
-    cloud.unsubscribe = firestoreApi.onSnapshot(cloud.familyRef, (remoteSnapshot) => {
-      if (!remoteSnapshot.exists()) return;
-      cloud.applyingRemote = true;
-      applyCloudPayload(remoteSnapshot.data());
-      cloud.applyingRemote = false;
-      renderAll();
-      setCloudStatus("online");
-    });
+    cloud.unsubscribe = startCloudPolling();
     setCloudStatus("online");
   } catch (error) {
-    setCloudStatus("error", "Bulut bağlantısı kurulamadı. Firebase ayarlarını ve güvenlik kurallarını kontrol et.");
+    cloud.ready = false;
+    const detail = error?.message || "Bilinmeyen hata";
+    setCloudStatus("error", `Bulut bağlantısı kurulamadı: ${detail}`);
   }
 }
 
@@ -292,12 +289,134 @@ function scheduleCloudSave() {
   window.clearTimeout(cloud.saveTimer);
   cloud.saveTimer = window.setTimeout(async () => {
     try {
-      await cloud.api.setDoc(cloud.familyRef, getCloudPayload(), { merge: true });
+      await cloud.api.setFamily(getCloudPayload());
       setCloudStatus("online");
-    } catch {
-      setCloudStatus("error", "Buluta yazılamadı. İnternet veya Firebase kuralı gerekebilir.");
+    } catch (error) {
+      setCloudStatus("error", `Buluta yazılamadı: ${error?.message || "İnternet veya Firebase kuralı gerekebilir."}`);
     }
   }, 450);
+}
+
+function startCloudPolling() {
+  const intervalId = window.setInterval(async () => {
+    if (!cloud.api || cloud.applyingRemote) return;
+    try {
+      const remoteData = await cloud.api.getFamily();
+      if (!remoteData) return;
+      cloud.applyingRemote = true;
+      applyCloudPayload(remoteData);
+      cloud.applyingRemote = false;
+      renderAll();
+      setCloudStatus("online");
+    } catch (error) {
+      setCloudStatus("error", `Bulut okunamadı: ${error?.message || "Bağlantı hatası"}`);
+    }
+  }, 5000);
+  return () => window.clearInterval(intervalId);
+}
+
+async function createCloudApi(config, familyCode) {
+  const auth = await signInAnonymouslyWithRest(config.apiKey);
+  const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents/families/${encodeURIComponent(familyCode)}`;
+
+  async function request(url, options = {}) {
+    return fetchWithTimeout(url, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${auth.idToken}`,
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+    });
+  }
+
+  return {
+    async getFamily() {
+      const response = await request(baseUrl);
+      if (response.status === 404) return null;
+      if (!response.ok) throw new Error(await getFirebaseError(response, "Firestore okuma hatası"));
+      const documentData = await response.json();
+      return fromFirestoreFields(documentData.fields || {});
+    },
+    async setFamily(payload) {
+      const response = await request(baseUrl, {
+        method: "PATCH",
+        body: JSON.stringify({ fields: toFirestoreFields(payload) }),
+      });
+      if (!response.ok) throw new Error(await getFirebaseError(response, "Firestore yazma hatası"));
+      return response.json();
+    },
+  };
+}
+
+async function signInAnonymouslyWithRest(apiKey) {
+  const response = await fetchWithTimeout(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ returnSecureToken: true }),
+  });
+  if (!response.ok) throw new Error(await getFirebaseError(response, "Anonim giriş hatası"));
+  return response.json();
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error.name === "AbortError") throw new Error("Bağlantı zaman aşımına uğradı.");
+    throw new Error(error.message || "Ağ bağlantısı kurulamadı.");
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+async function getFirebaseError(response, fallback) {
+  try {
+    const body = await response.json();
+    const message = body?.error?.message || fallback;
+    return `${fallback} (${response.status}): ${message}`;
+  } catch {
+    return `${fallback} (${response.status})`;
+  }
+}
+
+function toFirestoreFields(objectValue) {
+  return Object.fromEntries(
+    Object.entries(objectValue || {}).map(([key, value]) => [key, toFirestoreValue(value)])
+  );
+}
+
+function toFirestoreValue(value) {
+  if (value === null || value === undefined) return { nullValue: null };
+  if (Array.isArray(value)) {
+    return { arrayValue: { values: value.map((item) => toFirestoreValue(item)) } };
+  }
+  if (typeof value === "boolean") return { booleanValue: value };
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value };
+  }
+  if (typeof value === "object") return { mapValue: { fields: toFirestoreFields(value) } };
+  return { stringValue: String(value) };
+}
+
+function fromFirestoreFields(fields) {
+  return Object.fromEntries(
+    Object.entries(fields || {}).map(([key, value]) => [key, fromFirestoreValue(value)])
+  );
+}
+
+function fromFirestoreValue(value) {
+  if ("nullValue" in value) return null;
+  if ("booleanValue" in value) return value.booleanValue;
+  if ("integerValue" in value) return Number(value.integerValue);
+  if ("doubleValue" in value) return value.doubleValue;
+  if ("stringValue" in value) return value.stringValue;
+  if ("timestampValue" in value) return value.timestampValue;
+  if ("arrayValue" in value) return (value.arrayValue.values || []).map(fromFirestoreValue);
+  if ("mapValue" in value) return fromFirestoreFields(value.mapValue.fields || {});
+  return null;
 }
 
 function normalizeFamilyCode(value) {
@@ -335,6 +454,7 @@ function leaveFamily() {
   cloud.unsubscribe = null;
   cloud.familyRef = null;
   cloud.api = null;
+  cloud.ready = false;
   cloud.status = "local";
   state.familyCode = "";
   saveState();

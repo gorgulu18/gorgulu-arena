@@ -1,4 +1,4 @@
-const CACHE_NAME = "gorgulu-arena-v4";
+const CACHE_NAME = "gorgulu-arena-v5";
 const ASSETS = [
   "./",
   "./index.html",
