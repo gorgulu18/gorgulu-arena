@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#18202f" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="GÖRGÜLÜ ARENA" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <title>GÖRGÜLÜ ARENA</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Aile içi günlük mini oyun</p>
+          <h1>GÖRGÜLÜ ARENA</h1>
+        </div>
+        <div class="top-actions">
+          <div class="app-mood-icon" id="appMoodIcon" aria-label="Uygulama ruh hali">🏆</div>
+          <button class="install-button" id="installApp" type="button">Kur</button>
+          <button class="icon-button" id="openProfiles" type="button" aria-label="Profilleri düzenle" title="Profilleri düzenle">
+            <span aria-hidden="true">⚙</span>
+          </button>
+        </div>
+      </header>
+
+      <main>
+        <section class="hero-panel" aria-label="Günün özeti">
+          <div class="hero-copy">
+            <p class="date-pill" id="todayLabel"></p>
+            <h2>Bugünün kupaları sahiplerini bekliyor.</h2>
+            <p>Her aile üyesi birkaç eğlenceli kategori için oy verir, sonuçlar konfetiyle açılır.</p>
+            <p class="mood-line" id="moodLine"></p>
+          </div>
+          <div class="trophy-stage" aria-hidden="true">
+            <div class="spark spark-one"></div>
+            <div class="spark spark-two"></div>
+            <div class="trophy" id="heroMascot">🏆</div>
+            <div class="mini-badges">
+              <span>⭐</span>
+              <span>💬</span>
+              <span>⚡</span>
+            </div>
+          </div>
+        </section>
+
+        <nav class="tabs" aria-label="Uygulama bölümleri">
+          <button class="tab is-active" type="button" data-view="voteView">Oylama</button>
+          <button class="tab" type="button" data-view="memoryView">Günlük</button>
+          <button class="tab" type="button" data-view="resultsView">Sonuçlar</button>
+          <button class="tab" type="button" data-view="boardView">Pano</button>
+        </nav>
+
+        <section class="view is-active" id="voteView">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Sıra kimde?</p>
+              <h3>Oy veren kişiyi seç</h3>
+            </div>
+            <button class="ghost-button" id="resetToday" type="button">Bugünü sıfırla</button>
+          </div>
+          <div class="member-strip" id="voterStrip"></div>
+
+          <div class="vote-card" id="voteCard">
+            <div class="question-topline">
+              <span id="questionCount">1 / 6</span>
+              <span id="voterStatus">Oy veren seçilmedi</span>
+            </div>
+            <div class="progress-track" aria-hidden="true">
+              <div id="progressBar"></div>
+            </div>
+            <h3 id="categoryTitle">Başlamak için birini seç.</h3>
+            <p id="categoryHint">Her soru tek ekranda gelir. Büyük avatara bas, oyun aksın.</p>
+            <div class="candidate-grid" id="candidateGrid"></div>
+            <div class="vote-actions">
+              <button class="secondary-button" id="prevQuestion" type="button">Geri</button>
+              <button class="primary-button" id="nextQuestion" type="button">Sonraki</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="memoryView">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Bugüne iz bırak</p>
+              <h3>Bugüne bir cümle bırak</h3>
+            </div>
+            <button class="ghost-button" id="clearTodayNotes" type="button">Cümleleri temizle</button>
+          </div>
+          <div class="missed-banner" id="missedBanner"></div>
+          <div class="memory-panel">
+            <div>
+              <p class="memory-prompt">Bugünden akılda kalacak tek cümle ne olsun?</p>
+              <div class="note-author-strip" id="noteAuthorStrip"></div>
+            </div>
+            <div class="note-composer">
+              <textarea id="dailyNoteInput" maxlength="140" placeholder="Örn. Bugün evde küçük ama çok komik bir an vardı."></textarea>
+              <div class="note-actions">
+                <span id="noteCounter">0 / 140</span>
+                <button class="primary-button" id="saveDailyNote" type="button">Cümleyi bırak</button>
+              </div>
+            </div>
+          </div>
+          <div class="daily-notes-list" id="dailyNotesList"></div>
+        </section>
+
+        <section class="view" id="resultsView">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Günün finali</p>
+              <h3>Sonuç sahnesi</h3>
+            </div>
+            <button class="primary-button compact" id="revealResults" type="button">Sonuçları aç</button>
+          </div>
+          <div class="results-stage" id="resultsStage">
+            <div class="locked-results">
+              <span>🎁</span>
+              <h3>Sonuçlar hazır olunca burada parlayacak.</h3>
+              <p>Biraz oy biriksin, sonra kazanan rozetleri açalım.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="boardView">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Aile panosu</p>
+              <h3>Rozet durumu</h3>
+            </div>
+            <button class="ghost-button" id="addCategory" type="button">Kategori ekle</button>
+          </div>
+          <div class="score-grid" id="scoreGrid"></div>
+          <div class="category-lab">
+            <label for="newCategory">Yeni kategori fikri</label>
+            <div>
+              <input id="newCategory" type="text" maxlength="42" placeholder="Örn. Bugünün kahkaha kaynağı kimdi?" />
+              <button class="secondary-button" id="saveCategory" type="button">Ekle</button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <dialog class="profile-dialog" id="profileDialog">
+      <form method="dialog">
+        <div class="dialog-header">
+          <div>
+            <p class="eyebrow">4 kişilik aile</p>
+            <h3>Profilleri düzenle</h3>
+          </div>
+          <button class="icon-button" value="close" aria-label="Kapat" title="Kapat">×</button>
+        </div>
+        <div class="profile-editor" id="profileEditor"></div>
+        <menu class="dialog-actions">
+          <button class="secondary-button" value="close">Vazgeç</button>
+          <button class="primary-button" id="saveProfiles" value="default">Kaydet</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog class="install-dialog" id="installDialog">
+      <form method="dialog">
+        <div class="dialog-header">
+          <div>
+            <p class="eyebrow">Telefona kur</p>
+            <h3>GÖRGÜLÜ ARENA indirilebilir.</h3>
+          </div>
+          <button class="icon-button" value="close" aria-label="Kapat" title="Kapat">×</button>
+        </div>
+        <div class="install-steps">
+          <div>
+            <strong>iPhone</strong>
+            <p>Safari'de paylaş simgesine bas, sonra Ana Ekrana Ekle seç.</p>
+          </div>
+          <div>
+            <strong>Android</strong>
+            <p>Chrome menüsünden Uygulamayı yükle veya Ana ekrana ekle seç.</p>
+          </div>
+        </div>
+        <menu class="dialog-actions">
+          <button class="primary-button" value="close">Tamam</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <canvas class="confetti-canvas" id="confettiCanvas" aria-hidden="true"></canvas>
+    <script src="./app.js"></script>
+  </body>
+</html>
