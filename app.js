@@ -58,6 +58,7 @@ const state = loadState();
 const missedDaysOnOpen = calculateMissedDays(state.lastVisit);
 const cloud = {
   status: "local",
+  message: "",
   ready: false,
   applyingRemote: false,
   unsubscribe: null,
@@ -207,6 +208,7 @@ function saveLocalStateOnly() {
 
 function setCloudStatus(status, message = "") {
   cloud.status = status;
+  cloud.message = message;
   renderCloudStatus(message);
 }
 
@@ -238,6 +240,7 @@ function renderCloudStatus(message = "") {
             : "Firebase bekleniyor";
   const detail =
     message ||
+    cloud.message ||
     (cloud.status === "online"
       ? `${state.familyCode} odasına bağlısınız.`
       : hasConfig
@@ -316,17 +319,24 @@ function startCloudPolling() {
 }
 
 async function createCloudApi(config, familyCode) {
-  const auth = await signInAnonymouslyWithRest(config.apiKey);
+  let auth = null;
+  try {
+    auth = await signInAnonymouslyWithRest(config.apiKey);
+  } catch (error) {
+    auth = null;
+  }
   const baseUrl = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/(default)/documents/families/${encodeURIComponent(familyCode)}`;
 
   async function request(url, options = {}) {
+    const headers = {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    };
+    if (auth?.idToken) headers.Authorization = `Bearer ${auth.idToken}`;
+
     return fetchWithTimeout(url, {
       ...options,
-      headers: {
-        Authorization: `Bearer ${auth.idToken}`,
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
+      headers,
     });
   }
 
